@@ -20,16 +20,25 @@ class Overlay(QWidget):
         self.data = {"boxes": [], "target": None}
         self.visible_frame = False
         self.edit_zone = False
+        self._placed = None
 
     def present(self, data, settings):
         self.data, self.settings = data, settings
-        self.visible_frame = data["state"].startswith("Running")
-        self.position_window(int(self.winId()), data["monitor"])
+        # ESP stays visible whenever the session has detections — status text
+        # (e.g. "Bild zu alt") only gates input, not the overlay.
+        self.visible_frame = bool(data.get("show_esp", data["state"].startswith("Running")))
+        monitor = data.get("monitor")
+        place = None if not monitor else (monitor.get("left"), monitor.get("top"),
+                                          monitor.get("width"), monitor.get("height"))
+        if place is not None and place != self._placed:
+            self.position_window(int(self.winId()), monitor)
+            self._placed = place
         self.update()
 
     def clear(self):
         self.data = {"boxes": [], "target": None}
         self.visible_frame = False
+        self._placed = None
         self.update()
 
     def paintEvent(self, event):

@@ -121,6 +121,10 @@ pnpm build    # Produktions-Build
 └────────────────────────────┘
 ```
 
+**Persistenz:** Alle Regler, Hotkeys, Farben und die Display-Wahl landen in
+`desktop/settings.json` (debounced bei Änderung + beim Schließen). Der nächste
+Start lädt sie automatisch. Die Datei ist gitignored.
+
 **Sicherheits-Gates** (alle müssen zutreffen, sonst keine Eingabe):
 
 1. `aim_enabled` — Schalter „Enable mouse input“

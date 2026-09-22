@@ -36,6 +36,11 @@ class HotkeyButton(QPushButton):
     def currentData(self):
         return self.code
 
+    def setCode(self, code):
+        self.code = int(code)
+        self.cancel()
+        self.refresh()
+
     def refresh(self):
         self.setText(f'{KEYS.get(self.code, str(self.code))}  ·  Click to rebind')
 

@@ -119,10 +119,23 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(self.moves, [])
         self.assertTrue(self.worker._stop_event.is_set())
 
-    def test_settings_change_discards_old_result(self):
-        self.run_control(callback=lambda tick: self.worker.configure(replace(Settings(), vertical=.12)) if tick == 1 else self.keys.add(0x02))
+    def test_inference_settings_change_discards_old_result(self):
+        # confidence is an inference input — changing it must drop stale detections
+        self.run_control(callback=lambda tick: self.worker.configure(replace(Settings(), confidence=.5)) if tick == 1 else self.keys.add(0x02))
         self.assertEqual(self.moves, [])
         self.assertIsNone(self.worker._latest)
+
+    def test_aim_tuning_does_not_discard_detections(self):
+        # vertical/ESP cosmetics must keep the latest frame (no overlay flicker on tab switches)
+        self.run_control(callback=lambda tick: self.worker.configure(replace(Settings(), vertical=.12, line_width=4)) if tick == 1 else self.keys.add(0x02))
+        self.assertIsNotNone(self.worker._latest)
+        self.assertEqual(self.moves, [(750, 336)])
+
+    def test_stale_frame_still_emits_esp(self):
+        self.run_control(keys=[0x02], captured_at=999)
+        self.assertTrue(self.frames[0]["show_esp"])
+        self.assertTrue(self.frames[0]["boxes"])
+        self.assertEqual(self.moves, [])
 
     def test_sendinput_failure_is_not_silenced(self):
         with patch.object(engine.USER32, "SendInput", return_value=0):

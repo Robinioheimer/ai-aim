@@ -34,6 +34,23 @@ class VisionTests(unittest.TestCase):
         self.assertEqual(config.smoothing, 0)
         self.assertEqual(config.max_step, 0)
 
+    def test_settings_roundtrip_persists(self):
+        import tempfile
+        from pathlib import Path
+        from config import load_settings, save_settings
+        custom = replace(Settings(), window_title="My Game", monitor=2, smoothing=12,
+                         box_color="#ff0000", aim_key=0x05, profile=1)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "settings.json"
+            save_settings(custom, path)
+            self.assertEqual(load_settings(path), custom)
+            # Unknown keys from a newer build must not break older loads.
+            path.write_text('{"window_title": "Kept", "not_a_field": true}', encoding="utf-8")
+            loaded = load_settings(path)
+            self.assertEqual(loaded.window_title, "Kept")
+            self.assertEqual(loaded.model, Settings().model)
+        self.assertEqual(load_settings(Path(tmp) / "missing.json"), Settings())
+
     def test_player_class_not_head(self):
         self.assertEqual(resolve_classes({0: "head", 1: "player"}, -1), [1])
         self.assertEqual(resolve_classes({0: "person", 1: "car"}, -1), [0])

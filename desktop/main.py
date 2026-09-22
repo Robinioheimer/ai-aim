@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from engine import Detector, Settings, exclude_from_capture, position_overlay
+from config import load_settings, save_settings
 from controls import AccentCheckBox, HotkeyButton
 from help_text import HELP
 from overlay import Overlay
@@ -74,13 +75,15 @@ QScrollArea { border: none; background: transparent; }
 
 
 class Console(QMainWindow):
-    def __init__(self):
+    def __init__(self, settings: Settings | None = None, *, persist: bool = True):
         super().__init__()
         self.worker = None
         self.closing = False
         self.failed = False
+        self.persist = persist
+        self._loading = True
         self.overlay = Overlay(position_overlay)
-        self.defaults = Settings()
+        self.defaults = load_settings() if settings is None else settings
         self.setWindowTitle("Vision Test Console")
         self.resize(1000, 840)
         self.setMinimumSize(740, 620)
@@ -252,7 +255,7 @@ class Console(QMainWindow):
         self.toggle = HotkeyButton(0x75)
         self.field(safety_layout, "Pause / resume hotkey", self.toggle)
         safety_layout.addWidget(self.label("F8  ·  Emergency stop (fixed)", "eyebrow"))
-        note = self.label("Use borderless or windowed mode, and select the display containing the game. Detections cannot distinguish enemies from teammates without a trained model. Hidden or occluded players cannot be tracked from screen pixels alone. Settings reset when the app closes.", "muted")
+        note = self.label("Use borderless or windowed mode, and select the display containing the game. Detections cannot distinguish enemies from teammates without a trained model. Hidden or occluded players cannot be tracked from screen pixels alone. Settings are saved to settings.json automatically.", "muted")
         note.setWordWrap(True)
         safety_layout.addWidget(note)
         for name, group in [("Aufnahme", capture), ("Erkennung", detection), ("ESP", esp), ("Eigenfigur", exclusion), ("Zielen", aim), ("Sitzung", safety)]:
@@ -291,8 +294,84 @@ class Console(QMainWindow):
             combo.currentIndexChanged.connect(self.update_settings)
         self.title.textChanged.connect(self.update_settings)
         self.profile.activated.connect(self.apply_profile)
-        self.tabs.currentChanged.connect(self.update_settings)
+        self.monitor.currentIndexChanged.connect(self.update_settings)
+        self.tabs.currentChanged.connect(self.refresh_overlay)
         self.status_timer.timeout.connect(self.refresh_overlay)
+        self._save_timer = QTimer(self)
+        self._save_timer.setSingleShot(True)
+        self._save_timer.setInterval(400)
+        self._save_timer.timeout.connect(self._persist_settings)
+        # Apply persisted values once every control exists and signals are wired.
+        self.apply_settings(self.defaults)
+        self._loading = False
+
+    def apply_settings(self, config: Settings):
+        self._loading = True
+        try:
+            index = self.monitor.findData(config.monitor)
+            if index >= 0:
+                self.monitor.setCurrentIndex(index)
+            self.title.setText(config.window_title)
+            self.model.setText(config.model)
+            self.class_id.setValue(config.class_id)
+            self.profile.setCurrentIndex(config.profile)
+            self.desktop_detection.setChecked(config.desktop_detection)
+            self.arm.setChecked(config.aim_enabled)
+            index = self.input_mode.findData(config.input_mode)
+            if index >= 0:
+                self.input_mode.setCurrentIndex(index)
+            self.automatic.setChecked(config.automatic)
+            self.aim_key.setCode(config.aim_key)
+            self.toggle.setCode(config.toggle_key)
+            self.smoothing.setValue(int(config.smoothing))
+            self.vertical.setValue(int(round(config.vertical * 100)))
+            self._sync_region()
+            self.max_step.setValue(config.max_step)
+            index = self.image_size.findData(config.image_size)
+            if index >= 0:
+                self.image_size.setCurrentIndex(index)
+            self.confidence.setValue(int(round(config.confidence * 100)))
+            self.tiled.setChecked(config.tiled)
+            self.full_screen.setChecked(config.full_screen)
+            self.fov.setValue(config.fov)
+            self.fov.setEnabled(not config.full_screen)
+            self.uncertain_threshold.setValue(int(round(config.uncertain_threshold * 100)))
+            for checkbox, checked in [(self.boxes, config.boxes), (self.labels, config.labels),
+                                      (self.circle, config.circle), (self.tracers, config.tracers),
+                                      (self.skeleton, config.skeleton), (self.joints, config.joints),
+                                      (self.target_marker, config.target_marker),
+                                      (self.exclude_self, config.exclude_self)]:
+                checkbox.setChecked(checked)
+            index = self.box_style.findData(config.box_style)
+            if index >= 0:
+                self.box_style.setCurrentIndex(index)
+            index = self.tracer_origin.findData(config.tracer_origin)
+            if index >= 0:
+                self.tracer_origin.setCurrentIndex(index)
+            self.line_width.setValue(config.line_width)
+            self.opacity.setValue(config.opacity)
+            self.fill_opacity.setValue(config.fill_opacity)
+            self.keypoint_confidence.setValue(int(round(config.keypoint_confidence * 100)))
+            for key, button in self.colors.items():
+                button.setText(getattr(config, key))
+            for name in ("left", "top", "right", "bottom"):
+                self.exclusion_bounds[name].setValue(getattr(config, f"exclude_{name}"))
+        finally:
+            self._loading = False
+
+    def _sync_region(self):
+        value = round(self.vertical.value())
+        for i in range(self.region.count()):
+            if self.region.itemData(i) == value:
+                self.region.setCurrentIndex(i)
+                self.vertical.setEnabled(False)
+                return
+        self.region.setCurrentIndex(self.region.count() - 1)
+        self.vertical.setEnabled(True)
+
+    def _persist_settings(self):
+        if self.persist:
+            save_settings(self.settings())
 
     def choose_color(self, key):
         color = QColorDialog.getColor(QColor(self.colors[key].text()), self, "ESP-Farbe wählen")
@@ -308,6 +387,7 @@ class Console(QMainWindow):
             ("yolo11s-pose.pt", 640, False, 25),
             ("yolo11m-pose.pt", 1536, True, 20),
         ][index]
+        self._loading = True
         self.skeleton.setChecked(index != 0)
         self.profile.setCurrentIndex(index)
         self.model.setText(model)
@@ -316,6 +396,7 @@ class Console(QMainWindow):
         self.tiled.setChecked(tiled)
         self.confidence.setValue(confidence)
         self.full_screen.setChecked(True)
+        self._loading = False
         self.update_settings()
 
     def refresh_overlay(self):
@@ -442,7 +523,8 @@ class Console(QMainWindow):
                 self.model.setText(path)
 
     def settings(self):
-        return Settings(monitor=self.monitor.currentData(), model=self.model.text(),
+        return Settings(monitor=self.monitor.currentData(), profile=self.profile.currentIndex(),
+                        model=self.model.text(),
                         class_id=self.class_id.value(), window_title=self.title.text().strip(),
                         confidence=self.confidence.value() / 100, fov=self.fov.value(),
                         smoothing=self.smoothing.value(), vertical=self.vertical.value() / 100,
@@ -471,6 +553,10 @@ class Console(QMainWindow):
                  bounds["top"].value() < bounds["bottom"].value()))
 
     def update_settings(self, *_):
+        if self._loading:
+            return
+        if self.persist:
+            self._save_timer.start()
         self.fov.setEnabled(not self.full_screen.isChecked())
         self.refresh_overlay()
         if not self.valid_zone():
@@ -497,12 +583,19 @@ class Console(QMainWindow):
         self.failed = False
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
-        for control in [self.monitor, self.class_id, self.profile, self.aim_key, self.toggle, self.preview_button, *self.model_buttons]:
+        for control in [self.class_id, self.profile, self.aim_key, self.toggle, self.preview_button, *self.model_buttons]:
             control.setEnabled(False)
-        screen_index = self.monitor.currentIndex()
-        screens = QApplication.screens()
-        if screen_index < len(screens):
-            self.overlay.setGeometry(screens[screen_index].geometry())
+        try:
+            with mss.mss() as source:
+                index = self.monitor.currentData()
+                if index is None or not 1 <= index < len(source.monitors):
+                    raise ValueError("Selected display is unavailable.")
+                mon = source.monitors[index]
+            self.overlay.setGeometry(mon["left"], mon["top"], mon["width"], mon["height"])
+        except Exception as exc:
+            self.on_failure(str(exc))
+            self.finished()
+            return
         self.overlay.show()
         if not exclude_from_capture(int(self.overlay.winId())):
             self.overlay.hide()
@@ -546,7 +639,7 @@ class Console(QMainWindow):
             worker.deleteLater()
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
-        for control in [self.monitor, self.class_id, self.profile, self.aim_key, self.toggle, self.preview_button, *self.model_buttons]:
+        for control in [self.class_id, self.profile, self.aim_key, self.toggle, self.preview_button, *self.model_buttons]:
             control.setEnabled(True)
         if not self.failed:
             self.status.setText("Gestoppt · keine Mauseingabe. Einstellungen bleiben für die nächste Sitzung erhalten.")
@@ -559,6 +652,8 @@ class Console(QMainWindow):
             self.stop()
             event.ignore()
         else:
+            self._save_timer.stop()
+            self._persist_settings()
             self.overlay.close()
             event.accept()
 

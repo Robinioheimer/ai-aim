@@ -22,10 +22,13 @@ def select_target(boxes, config, width, height):
     return accepted, min(candidates, default=None)
 
 
-def input_status(config, target, foreground, aim_held):
+def input_status(config, target, foreground, aim_held, foreground_title=None):
     if not config.aim_enabled:
         return "Mauseingabe deaktiviert"
     if not foreground:
+        if foreground_title:
+            return (f"Eingabe gesperrt: '{config.window_title}' kommt nicht in "
+                    f"aktuellem Titel vor ({foreground_title!r})")
         return "Eingabe gesperrt: Spielfenster nicht im Vordergrund"
     if not target:
         return "Kein auswählbares Ziel · Erkennung, Eigenzone und Auswahlradius prüfen"

@@ -28,6 +28,9 @@ __pycache__/
 *.pt
 !public/**/*.pt
 
+# ---- App state ----
+desktop/settings.json
+
 # ---- Local test tooling (stub libs for offscreen Qt on CI-like hosts) ----
 .local-libs/
 

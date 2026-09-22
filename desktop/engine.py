@@ -13,7 +13,7 @@ from PySide6.QtCore import QThread, Signal
 from targeting import select_target, input_status, can_move
 
 
-from config import Settings, BUILTIN_POSE_MODELS
+from config import Settings, BUILTIN_POSE_MODELS, INFERENCE_FIELDS
 from vision import resolve_classes, infer_frame, attach_poses
 from motion import Motion, target_is_fresh
 
@@ -73,6 +73,15 @@ def held(key: int) -> bool:
     return bool(USER32.GetAsyncKeyState(key) & 0x8000)
 
 
+def foreground_window_title() -> str:
+    buffer = ctypes.create_unicode_buffer(512)
+    window = USER32.GetForegroundWindow()
+    if not window:
+        return ""
+    USER32.GetWindowTextW(window, buffer, len(buffer))
+    return buffer.value
+
+
 def foreground_matches(title: str) -> bool:
     buffer = ctypes.create_unicode_buffer(512)
     window = USER32.GetForegroundWindow()
@@ -130,9 +139,14 @@ class Detector(QThread):
 
     def configure(self, settings: Settings):
         with self._lock:
+            previous = self._settings
             self._settings = replace(settings)
-            self._epoch += 1
-            self._latest = None
+            # Only discard detections when inference inputs changed. Tab switches,
+            # ESP cosmetics and aim tuning must not blank the overlay.
+            if any(getattr(previous, name) != getattr(settings, name)
+                   for name in INFERENCE_FIELDS):
+                self._epoch += 1
+                self._latest = None
 
     def stop(self):
         self._stop_event.set()
@@ -160,11 +174,12 @@ class Detector(QThread):
         setattr(cls, slot, ((os.path.abspath(path), stamp, device), model))
         return model
 
-    def _control_loop(self, monitor):
+    def _control_loop(self, initial_monitor):
         motion = Motion()
         previous_toggle = False
         previous_time = time.perf_counter()
         next_display = 0.0
+        monitor = dict(initial_monitor)
         try:
             while not self._stop_event.is_set():
                 started = time.perf_counter()
@@ -183,15 +198,27 @@ class Detector(QThread):
                     previous_toggle = toggle
                     active, latest, epoch = self._active, self._latest, self._epoch
                     phase, fps, names, device = self._phase, self._fps, self._names, self._device
+                # Keep following the selected display even after the combo changes.
+                if "_index" in monitor and config.monitor != monitor["_index"]:
+                    try:
+                        with mss.mss() as source:
+                            if 1 <= config.monitor < len(source.monitors):
+                                monitor = dict(source.monitors[config.monitor])
+                                monitor["_index"] = config.monitor
+                    except Exception:
+                        pass
+                monitor.setdefault("_index", config.monitor)
                 foreground = foreground_matches(config.window_title)
+                active_title = foreground_window_title() if not foreground else None
                 aim_held = held(config.aim_key)
                 boxes, target, detections = [], None, []
                 fresh = latest is not None and target_is_fresh(latest[1], started, config.target_max_age)
-                if active and fresh:
+                # Always project the newest detections for the ESP; staleness only gates input.
+                if active and latest is not None:
                     detections = latest[0]
                     boxes, target = select_target([item["box"] for item in detections], config,
                                                    monitor["width"], monitor["height"])
-                if active and can_move(config, target, foreground, aim_held):
+                if active and fresh and can_move(config, target, foreground, aim_held):
                     if config.input_mode == "cursor":
                         origin = cursor_position()
                         point = (monitor["left"] + target[1], monitor["top"] + target[2])
@@ -222,16 +249,21 @@ class Detector(QThread):
                     elif phase:
                         state = phase
                     elif not foreground and not config.desktop_detection:
-                        state = "Warte auf Spielfenster im Vordergrund"
+                        state = (f"Warte auf Spielfenster · gesucht: {config.window_title!r}"
+                                + (f" · aktiv: {active_title!r}" if active_title else ""))
                     elif latest is not None and not fresh:
                         state = "Bild zu alt für Eingabe (>250 ms) · Auflösung reduzieren / Schnellprofil wählen"
+                        if foreground:
+                            state += " · " + input_status(config, target, foreground, aim_held, active_title)
                     else:
-                        state = f"Running · {device} · " + input_status(config, target, foreground, aim_held)
+                        state = (f"Running · {device} · "
+                                 + input_status(config, target, foreground, aim_held, active_title))
                     accepted = {tuple(box) for box in boxes}
                     self.frame.emit({"boxes": boxes, "target": target, "monitor": monitor,
                                      "poses": [item["keypoints"] for item in detections
                                                if tuple(item["box"]) in accepted],
                                      "names": names, "fps": fps, "state": state,
+                                     "show_esp": active and latest is not None,
                                      "latency_ms": (started - latest[1]) * 1000 if latest else None})
                     next_display = started + 1 / 30
                 self._stop_event.wait(max(0, 1 / 240 - (time.perf_counter() - started)))
@@ -248,7 +280,8 @@ class Detector(QThread):
             with mss.mss() as capture:
                 if not 1 <= initial.monitor < len(capture.monitors):
                     raise ValueError("Selected monitor is no longer available.")
-                monitor = capture.monitors[initial.monitor]
+                monitor = dict(capture.monitors[initial.monitor])
+                monitor["_index"] = initial.monitor
                 controller = threading.Thread(target=self._control_loop, args=(monitor,), daemon=True)
                 controller.start()
                 from ultralytics import YOLO
@@ -272,6 +305,11 @@ class Detector(QThread):
                     while not self._stop_event.is_set():
                         with self._lock:
                             config, active, epoch = self._settings, self._active, self._epoch
+                        if not 1 <= config.monitor < len(capture.monitors):
+                            self._set_phase(f"Display {config.monitor} nicht verfügbar · Display neu wählen")
+                            self._stop_event.wait(0.1)
+                            continue
+                        monitor = capture.monitors[config.monitor]
                         if not active or (not config.desktop_detection and not foreground_matches(config.window_title)):
                             with self._lock:
                                 self._latest = None

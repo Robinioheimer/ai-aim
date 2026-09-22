@@ -99,7 +99,7 @@ class ConsoleTests(unittest.TestCase):
             spec.loader.exec_module(cls.module)
 
     def setUp(self):
-        self.console = self.module.Console()
+        self.console = self.module.Console(self.module.Settings(), persist=False)
         self.console.status_timer.stop()
 
     def tearDown(self):
