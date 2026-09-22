@@ -30,6 +30,24 @@ Das Skript legt beim ersten Start eine `.venv` an, installiert `requirements.txt
 und öffnet die **Vision Test Console**. Spätere Starts überspringen die Installation,
 solange die Requirements unverändert sind.
 
+> **WICHTIG bei langen Pfaden („Windows Long Path"):**
+> PySide6 enthält sehr tiefe Dateipfade. Wenn der Projektordner selbst schon
+> lang ist (z. B. `Downloads\ai-aim-arena-...\ai-aim-arena-...\`), reicht die
+> 260-Zeichen-Grenze von Windows nicht mehr → `pip` bricht mit
+> `OSError: ... No such file or directory` ab.
+>
+> **Sofort-Fix:**
+> 1. Defekten Ordner löschen: `...\desktop\.venv`
+> 2. Projekt an einen kurzen Pfad verschieben, z. B. `C:\retrac`
+> 3. `Start Retrac Lab.cmd` erneut ausführen
+>
+> Das Startskript legt die Umgebung automatisch nach
+> `%LOCALAPPDATA%\RetracLab\venv`, sobald der Projektpfad zu lang ist.
+> Alternativ Windows „Long paths" aktivieren:
+> *Windows 11:* Einstellungen → System → Für Entwickler → **Long paths** an
+> *oder* (Admin): `LongPathsEnabled=1` unter
+> `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem` setzen.
+
 Manuell (entspricht dem Skript):
 
 ```powershell
