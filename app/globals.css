@@ -1,0 +1,121 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-ink: #0b0f14;
+  --color-panel: #11161c;
+  --color-card: #19212a;
+  --color-line: #303c48;
+  --color-line-soft: #1f2a35;
+  --color-mist: #a7b6c4;
+  --color-chalk: #e4ebf1;
+  --color-mint: #65d5c7;
+  --color-mint-bright: #a5f3d8;
+  --color-mint-deep: #234840;
+  --color-violet: #b9acff;
+  --color-amber: #efb86e;
+  --color-rose: #df7096;
+
+  --font-display: 'Segoe UI', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Cascadia Code', 'JetBrains Mono', ui-monospace, monospace;
+
+  --animate-rise: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade: fade 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  border-color: var(--color-line-soft);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-chalk);
+  font-family: var(--font-display);
+  text-rendering: optimizeLegibility;
+}
+
+/* Subtle grid backdrop for hero sections */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, rgb(48 60 72 / 0.35) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(48 60 72 / 0.35) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, black 30%, transparent 75%);
+}
+
+.bg-glow {
+  background:
+    radial-gradient(ellipse 50% 40% at 20% -10%, rgb(101 213 199 / 0.16), transparent 60%),
+    radial-gradient(ellipse 45% 35% at 85% 0%, rgb(185 172 255 / 0.12), transparent 55%);
+}
+
+.text-gradient {
+  background: linear-gradient(100deg, #e4ebf1 20%, #a5f3d8 55%, #b9acff 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.card-hover {
+  transition:
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.card-hover:hover {
+  transform: translateY(-3px);
+  border-color: rgb(101 213 199 / 0.45);
+  box-shadow: 0 12px 40px -18px rgb(101 213 199 / 0.35);
+}
+
+::selection {
+  background: rgb(101 213 199 / 0.35);
+  color: #e4ebf1;
+}
+
+/* Thin scrollbars to match desktop app */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #0b0f14;
+}
+::-webkit-scrollbar-thumb {
+  background: #303c48;
+  border-radius: 6px;
+  border: 2px solid #0b0f14;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #415363;
+}

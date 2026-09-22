@@ -1,0 +1,19 @@
+[project]
+name = "retrac-desktop"
+version = "5.0.0"
+description = "RETRAC Vision Test Console - screen-based detection and controlled input testing (Windows)"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "PySide6>=6.8,<7",
+    "mss>=10,<11",
+    "numpy>=1.26,<3",
+    "ultralytics>=8.3,<9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+python_files = ["test_*.py"]
+addopts = "-q"

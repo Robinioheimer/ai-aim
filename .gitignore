@@ -1,0 +1,43 @@
+# ---- Node / Next.js ----
+node_modules/
+.next/
+out/
+build/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# v0 sandbox internal files
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/
+
+# ---- Python ----
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- Model weights / local artifacts ----
+*.pt
+!public/**/*.pt
+
+# ---- Local test tooling (stub libs for offscreen Qt on CI-like hosts) ----
+.local-libs/
+
+# ---- Environment ----
+.env
+.env*.local
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
